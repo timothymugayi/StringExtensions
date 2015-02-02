@@ -1,7 +1,7 @@
 ﻿/* StringExtensions Library provides comprehensive string extension methods that go behold 
  * just the common string validation methods extending the .Net System.string class. 
  * The idea to create such a library was motivated by the lack of such a StringUtil library such as 
- * org.apache.commons.lang3.StringUtils in the the .Net realm. The aim of this library is to serve as a goto library 
+ * org.apache.commons.lang3.StringUtils in the .Net realm. The aim of this library is to serve as a goto library 
  * for those wishing to have such a library readily available to incorporate in to new or existing projects. 
  * 
  * Copyright (C) 2015  Timothy Mugayi
@@ -456,6 +456,35 @@ namespace StringExtensionLibrary
             }
             return defaultValue;
         }
+
+        /// <summary>
+        ///     Convert a string to its equivalent byte array
+        /// </summary>
+        /// <param name="val">string to convert</param>
+        /// <returns>System.byte array</returns>
+        public static byte[] ToBytes(this string val)
+        {
+            var bytes = new byte[val.Length*sizeof (char)];
+            Buffer.BlockCopy(val.ToCharArray(), 0, bytes, 0, bytes.Length);
+            return bytes;
+        }
+
+        /// <summary>
+        ///     Reverse string
+        /// </summary>
+        /// <param name="val">string to reverse</param>
+        /// <returns>System.string</returns>
+        public static string Reverse(this string val)
+        {
+            var chars = new char[val.Length];
+            for (int i = val.Length - 1, j = 0; i >= 0; --i, ++j)
+            {
+                chars[j] = val[i];
+            }
+            val = new String(chars);
+            return val;
+        }
+
 
         /// <summary>
         ///     Appends String quotes for type CSV data
