@@ -37,7 +37,7 @@ namespace StringExtensions
         [TestMethod]
         public void TestRemovePrefixSufix()
         {
-            Assert.AreEqual("berbahaya".RemovePrefix("ber"), "bahaya");
+            Assert.AreEqual("berbahaya".RemovePrefix("ber", false), "bahaya");
             Assert.AreEqual("masakan".RemoveSuffix("an"), "masak");
         }
 
