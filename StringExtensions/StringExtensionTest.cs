@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using StringExtensionLibrary;
@@ -16,9 +17,43 @@ namespace StringExtensions
         High,
     };
 
+    internal class Product
+    {
+        public string Name { set; get; }
+        public DateTime ExpiryDate { set; get; }
+        public decimal Price { set; get; }
+        public string[] Sizes { set; get; }
+
+        public override string ToString()
+        {
+            return string.Format("Name={0},ExpiryDate={1},Price={2},Sizes=[{3}]", Name, ExpiryDate, Price,
+                string.Join(",", Sizes));
+        }
+    }
+
     [TestClass]
     public class StringExtensionTest
     {
+        [TestMethod]
+        public void TestJsonStringToObject()
+        {
+            const string productString = "{'name':'Widget','expiryDate':'2010-12-20T18:01Z'," +
+                                         "'price':9.99,'sizes':['Small','Medium','Large']}";
+            var product = productString.JsonToObject<Product>();
+            Assert.IsNotNull(product);
+            Console.WriteLine(product);
+
+            const string productListString =
+                "[{'name':'Widget','expiryDate':'2010-12-20T18:01Z','price':9.99,'sizes':['Small','Medium','Large']}," +
+                "{'name':'Image','expiryDate':'2015-12-20T18:01Z','price':20.50,'sizes':['Small','Medium','Large','Extra Large']}]";
+            var products = productListString.JsonToObject<List<Product>>();
+            Assert.IsNotNull(products);
+            foreach (Product obj in products)
+            {
+                Console.WriteLine(obj);
+            }
+        }
+
         [TestMethod]
         [ExpectedException(typeof (ArgumentException))]
         public void TestToEnum()

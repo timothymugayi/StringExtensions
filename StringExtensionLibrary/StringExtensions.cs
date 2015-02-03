@@ -23,6 +23,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 
 namespace StringExtensionLibrary
 {
@@ -571,14 +572,15 @@ namespace StringExtensionLibrary
 
         /// <summary>
         ///     Converts a Json string to object of type T method applicable for multi hierarchy objects i.e
-        ///     having zero or many parent child relationships
+        ///     having zero or many parent child relationships, Ignore loop references and do not serialize if cycles are detected.
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="val"></param>
         /// <returns></returns>
         public static T JsonToObject<T>(this string val)
         {
-            throw new NotImplementedException();
+            var settings = new JsonSerializerSettings {ReferenceLoopHandling = ReferenceLoopHandling.Ignore};
+            return JsonConvert.DeserializeObject<T>(val, settings);
         }
     }
 }
