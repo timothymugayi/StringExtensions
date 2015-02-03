@@ -35,6 +35,13 @@ namespace StringExtensions
     public class StringExtensionTest
     {
         [TestMethod]
+        public void TestRemovePrefixSufix()
+        {
+            Assert.AreEqual("berbahaya".RemovePrefix("ber"), "bahaya");
+            Assert.AreEqual("masakan".RemoveSuffix("an"), "masak");
+        }
+
+        [TestMethod]
         public void TestJsonStringToObject()
         {
             const string productString = "{'name':'Widget','expiryDate':'2010-12-20T18:01Z'," +

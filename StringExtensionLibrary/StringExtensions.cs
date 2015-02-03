@@ -342,10 +342,6 @@ namespace StringExtensionLibrary
             {
                 throw new ArgumentNullException("suffix", "suffix parameter is null");
             }
-            if (val.EndsWith(suffix))
-            {
-                return true;
-            }
             if (val.Length < suffix.Length)
             {
                 return false;
@@ -368,10 +364,6 @@ namespace StringExtensionLibrary
             if (prefix == null)
             {
                 throw new ArgumentNullException("prefix", "prefix parameter is null");
-            }
-            if (val.StartsWith(prefix))
-            {
-                return true;
             }
             if (val.Length < prefix.Length)
             {
@@ -581,6 +573,36 @@ namespace StringExtensionLibrary
         {
             var settings = new JsonSerializerSettings {ReferenceLoopHandling = ReferenceLoopHandling.Ignore};
             return JsonConvert.DeserializeObject<T>(val, settings);
+        }
+
+        /// <summary>
+        ///     Removes the first part of the string, if it matches case insensitive, if no match found return original string
+        /// </summary>
+        /// <param name="val">string to remove prefix</param>
+        /// <param name="prefix">prefix</param>
+        /// <returns>trimmed string with no prefix or original string</returns>
+        public static string RemovePrefix(this string val, string prefix)
+        {
+            if (!string.IsNullOrEmpty(val) && val.StartsWithIgnoreCase(prefix))
+            {
+                return val.Substring(prefix.Length, val.Length - prefix.Length);
+            }
+            return val;
+        }
+
+        /// <summary>
+        ///     Removes the end part of the string, if it matches case insensitive, if no match found return original string
+        /// </summary>
+        /// <param name="val">string to remove suffix</param>
+        /// <param name="suffix">suffix</param>
+        /// <returns>trimmed string with no suffix or original string</returns>
+        public static string RemoveSuffix(this string val, string suffix)
+        {
+            if (!string.IsNullOrEmpty(val) && val.EndsWithIgnoreCase(suffix))
+            {
+                return val.Substring(0,val.Length - suffix.Length);
+            }
+            return null;
         }
     }
 }
