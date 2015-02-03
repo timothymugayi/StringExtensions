@@ -1,12 +1,39 @@
-﻿using System.Security.Cryptography;
+﻿using System;
+using System.Security.Cryptography;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using StringExtensionLibrary;
 
 namespace StringExtensions
 {
+    /// <summary>
+    ///     Temperature enum default values in c# are always 0 or first enum element
+    /// </summary>
+    internal enum Temperature
+    {
+        Unknown,
+        Low,
+        Medium,
+        High,
+    };
+
     [TestClass]
     public class StringExtensionTest
     {
+        [TestMethod]
+        [ExpectedException(typeof (ArgumentException))]
+        public void TestToEnum()
+        {
+            Temperature guage = "VeryHigh".ToEnum(Temperature.High);
+            Assert.IsTrue(guage.Equals(Temperature.High));
+            guage = "low".ToEnum(Temperature.Unknown);
+            Assert.IsTrue(guage.Equals(Temperature.Low));
+            guage = "veryHigh".ToEnum<Temperature>();
+            Assert.IsTrue(guage.Equals(Temperature.Unknown));
+            guage = "Medium".ToEnum<Temperature>();
+            Assert.IsTrue(guage.Equals(Temperature.Medium));
+            Assert.IsInstanceOfType("high".ToEnum<int>(), typeof (Temperature));
+        }
+
         [TestMethod]
         public void TestCountOccurrences()
         {

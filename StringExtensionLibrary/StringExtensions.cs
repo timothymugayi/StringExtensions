@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
@@ -195,27 +196,30 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
+        ///     Converts string to its Enum type
+        ///     Checks of string is a member of type T enum before converting
+        ///     if fails returns default enum
         /// </summary>
         /// <typeparam name="T">generic type</typeparam>
-        /// <param name="value">string enum value</param>
-        /// <returns>
-        ///     Enum object
-        /// </returns>
+        /// <param name="value"> The string representation of the enumeration name or underlying value to convert</param>
+        /// <param name="defaultValue"></param>
+        /// <returns>Enum object</returns>
         /// <remarks>
-        ///     <exception cref="ArgumentNullException">enumType or value is null</exception>
         ///     <exception cref="ArgumentException">
         ///         enumType is not an System.Enum.-or- value is either an empty string ("") or
         ///         only contains white space.-or- value is a name, but not one of the named constants defined for the enumeration
         ///     </exception>
-        ///     <exception cref="OverflowException">value is outside the range of the underlying type of enumTypel</exception>
         /// </remarks>
-        public static T ToEnum<T>(this string value)
+        public static T ToEnum<T>(this string value, T defaultValue = default(T)) where T : struct
         {
             if (!typeof (T).IsEnum)
             {
-                throw new ArgumentException("Type T Must an enum");
+                throw new ArgumentException("Type T Must of type System.Enum");
             }
-            return (T) Enum.Parse(typeof (T), value, true);
+
+            T result;
+            bool isParsed = Enum.TryParse(value, true, out result);
+            return isParsed ? result : defaultValue;
         }
 
         /// <summary>
@@ -324,55 +328,55 @@ namespace StringExtensionLibrary
         /// <summary>
         ///     Check a String ends with another string ignoring the case.
         /// </summary>
-        /// <param name="str">string</param>
+        /// <param name="val">string</param>
         /// <param name="suffix">suffix</param>
         /// <returns>true or false</returns>
-        public static bool EndsWithIgnoreCase(this string str, string suffix)
+        public static bool EndsWithIgnoreCase(this string val, string suffix)
         {
-            if (str == null)
+            if (val == null)
             {
-                throw new ArgumentNullException("str", "str parameter is null");
+                throw new ArgumentNullException("val", "val parameter is null");
             }
             if (suffix == null)
             {
                 throw new ArgumentNullException("suffix", "suffix parameter is null");
             }
-            if (str.EndsWith(suffix))
+            if (val.EndsWith(suffix))
             {
                 return true;
             }
-            if (str.Length < suffix.Length)
+            if (val.Length < suffix.Length)
             {
                 return false;
             }
-            return str.ToLower().EndsWith(suffix.ToLower());
+            return val.ToLower().EndsWith(suffix.ToLower());
         }
 
         /// <summary>
         ///     Check a String starts with another string ignoring the case.
         /// </summary>
-        /// <param name="str">string</param>
+        /// <param name="val">string</param>
         /// <param name="prefix">prefix</param>
         /// <returns>true or false</returns>
-        public static bool StartsWithIgnoreCase(this string str, string prefix)
+        public static bool StartsWithIgnoreCase(this string val, string prefix)
         {
-            if (str == null)
+            if (val == null)
             {
-                throw new ArgumentNullException("str", "str parameter is null");
+                throw new ArgumentNullException("val", "val parameter is null");
             }
             if (prefix == null)
             {
                 throw new ArgumentNullException("prefix", "prefix parameter is null");
             }
-            if (str.StartsWith(prefix))
+            if (val.StartsWith(prefix))
             {
                 return true;
             }
-            if (str.Length < prefix.Length)
+            if (val.Length < prefix.Length)
             {
                 return false;
             }
-            return str.ToLower().StartsWith(prefix.ToLower());
+            return val.ToLower().StartsWith(prefix.ToLower());
         }
 
         /// <summary>
@@ -440,7 +444,6 @@ namespace StringExtensionLibrary
             }
             return s;
         }
-
 
         /// <summary>
         ///     Function returns a default String value if given value is null or empty
@@ -542,6 +545,40 @@ namespace StringExtensionLibrary
         public static int CountOccurrences(this string val, string stringToMatch)
         {
             return Regex.Matches(val, stringToMatch, RegexOptions.IgnoreCase).Count;
+        }
+
+        /// <summary>
+        ///     Converts a Json string to dictionary object method applicable for single hierarchy objects i.e
+        ///     no parent child relationships, for parent child relationships <see cref="JsonToExpanderObject" />
+        /// </summary>
+        /// <param name="val">string formated as Json</param>
+        /// <returns>IDictionary Json object</returns>
+        public static IDictionary<string, object> JsonToDictionary(this string val)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        ///     Converts a Json string to ExpandoObject method applicable for multi hierarchy objects i.e
+        ///     having zero or many parent child relationships
+        /// </summary>
+        /// <param name="val">string formated as Json</param>
+        /// <returns>System.Dynamic.ExpandoObject Json object<see cref="ExpandoObject" /></returns>
+        public static ExpandoObject JsonToExpanderObject(this string val)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        ///     Converts a Json string to object of type T method applicable for multi hierarchy objects i.e
+        ///     having zero or many parent child relationships
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="val"></param>
+        /// <returns></returns>
+        public static T JsonToObject<T>(this string val)
+        {
+            throw new NotImplementedException();
         }
     }
 }
