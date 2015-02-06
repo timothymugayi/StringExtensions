@@ -35,6 +35,15 @@ namespace StringExtensions
     public class StringExtensionTest
     {
         [TestMethod]
+        public void TestIsAlphaOrNumeric()
+        {
+            Assert.IsTrue("Burning bridges as we go".IsAlpha());
+            Assert.IsFalse("Burning bridges as we go!".IsAlpha());
+            Assert.IsTrue("10 minutes left to code".IsAlphaNumeric());
+            Assert.IsTrue("123456".IsAlphaNumeric());
+        }
+
+        [TestMethod]
         public void TestRemovePrefixSufix()
         {
             Assert.AreEqual("berbahaya".RemovePrefix("ber", false), "bahaya");
