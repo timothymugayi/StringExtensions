@@ -625,7 +625,7 @@ namespace StringExtensionLibrary
 
 
         /// <summary>
-        ///     Checks if the String contains only unicode letters.
+        ///     Checks if the String contains only Unicode letters.
         ///     null will return false. An empty String ("") will return false.
         /// </summary>
         /// <param name="val">string to check if is Alpha</param>
@@ -640,7 +640,7 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
-        ///     Checks if the String contains only unicode letters, digits.
+        ///     Checks if the String contains only Unicode letters, digits.
         ///     null will return false. An empty String ("") will return false.
         /// </summary>
         /// <param name="val">string to check if is Alpha or Numeric</param>
@@ -652,6 +652,53 @@ namespace StringExtensionLibrary
                 return false;
             }
             return val.Trim().Replace(" ", "").All(Char.IsLetterOrDigit);
+        }
+
+        /// <summary>
+        ///     Convert string to Hash using Sha512
+        /// </summary>
+        /// <param name="val">string to hash</param>
+        /// <returns>Hashed string</returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static string CreateHashSha512(string val)
+        {
+            if (string.IsNullOrEmpty(val))
+            {
+                throw new ArgumentException("val");
+            }
+            var sb = new StringBuilder();
+            using (SHA512 hash = SHA512.Create())
+            {
+                byte[] data = hash.ComputeHash(val.ToBytes());
+                foreach (byte b in data)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        ///     Convert string to Hash using Sha256
+        /// </summary>
+        /// <param name="val">string to hash</param>
+        /// <returns>Hashed string</returns>
+        public static string CreateHashSha256(string val)
+        {
+            if (string.IsNullOrEmpty(val))
+            {
+                throw new ArgumentException("val");
+            }
+            var sb = new StringBuilder();
+            using (SHA256 hash = SHA256.Create())
+            {
+                byte[] data = hash.ComputeHash(val.ToBytes());
+                foreach (byte b in data)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+            }
+            return sb.ToString();
         }
     }
 }

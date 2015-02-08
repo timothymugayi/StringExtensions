@@ -26,8 +26,65 @@ namespace StringExtensions
 
         public override string ToString()
         {
-            return string.Format("Name={0},ExpiryDate={1},Price={2},Sizes=[{3}]", Name, ExpiryDate, Price,
+            return string.Format("Name: {0}, ExpiryDate: {1}, Price: {2}, Sizes: [{3}]", Name, ExpiryDate, Price,
                 string.Join(",", Sizes));
+        }
+    }
+
+
+    internal class Address
+    {
+        public Address()
+        {
+            CreatedOn = DateTime.UtcNow;
+            Active = true;
+        }
+
+        public string Street1 { set; get; }
+        public string Street2 { set; get; }
+        public string Street3 { set; get; }
+        public string City { set; get; }
+        public string Country { set; get; }
+        public DateTime CreatedOn { set; get; }
+        public bool Active { set; get; }
+
+        public override string ToString()
+        {
+            return
+                string.Format(
+                    "Active: {0}, City: {1}, Country: {2}, CreatedOn: {3}, Street1: {4}, Street2: {5}, Street3: {6}",
+                    Active, City, Country, CreatedOn, Street1, Street2, Street3);
+        }
+    }
+
+    internal class Person
+    {
+        public Person()
+        {
+            CreatedOn = DateTime.UtcNow;
+            Addresses = new HashSet<Address>();
+        }
+
+        public string Name { set; get; }
+        public int Age { set; get; }
+        public DateTime Dob { set; get; }
+        public string Email { set; get; }
+        public string SocialSecurityNo { set; get; }
+        public string MobileNo { set; get; }
+        public string OfficeNo { set; get; }
+        public string PassportNo { set; get; }
+        public ICollection<Address> Addresses { set; get; }
+        public string BirthPlace { set; get; }
+        public string Nationality { set; get; }
+        public DateTime CreatedOn { set; get; }
+
+        public override string ToString()
+        {
+            return
+                string.Format(
+                    "Name: {0}, Age: {1}, Dob: {2}, Email: {3}, SocialSecurityNo: {4}, MobileNo: {5}, OfficeNo: {6}, Address: {7}, PassportNo: {8}, BirthPlace: {9}, Nationality: {10}",
+                    Name, Age, Dob, Email, SocialSecurityNo, MobileNo, OfficeNo, Addresses, PassportNo, BirthPlace,
+                    Nationality);
         }
     }
 
