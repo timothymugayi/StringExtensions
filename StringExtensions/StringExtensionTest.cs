@@ -92,6 +92,18 @@ namespace StringExtensions
     public class StringExtensionTest
     {
         [TestMethod]
+        public void TestQueryStringToDictionary()
+        {
+            const string url = "?name=ferret&field1=value1&field2=value2&field3=value3";
+            IDictionary<string, string> queryValues = url.QueryStringToDictionary();
+            Assert.IsNotNull(queryValues);
+            foreach (var obj in queryValues)
+            {
+                Console.WriteLine("key={0},value={1}", obj.Key, obj.Value);
+            }
+        }
+
+        [TestMethod]
         public void TestIsAlphaOrNumeric()
         {
             Assert.IsTrue("Burning bridges as we go".IsAlpha());

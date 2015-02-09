@@ -700,5 +700,29 @@ namespace StringExtensionLibrary
             }
             return sb.ToString();
         }
+
+        /// <summary>
+        ///     Convert url query string to IDictionary value key pair
+        /// </summary>
+        /// <param name="queryString">query string value</param>
+        /// <returns>IDictionary value key pair</returns>
+        public static IDictionary<string, string> QueryStringToDictionary(this string queryString)
+        {
+            if (string.IsNullOrWhiteSpace(queryString))
+            {
+                return null;
+            }
+            if (!queryString.Contains("?"))
+            {
+                return null;
+            }
+            string query = queryString.Replace("?", "");
+            if (!query.Contains("="))
+            {
+                return null;
+            }
+            return query.Split('&').Select(p => p.Split('=')).ToDictionary(
+                key => key[0].ToLower().Trim(), value => value[1]);
+        }
     }
 }
