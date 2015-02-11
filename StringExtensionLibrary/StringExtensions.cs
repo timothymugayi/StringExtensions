@@ -388,6 +388,22 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
+        ///     Remove Characters from string
+        /// </summary>
+        /// <param name="s">string to remove characters</param>
+        /// <param name="chars">array of chars</param>
+        /// <returns>System.string</returns>
+        public static string RemoveChars(this string s, params char[] chars)
+        {
+            var sb = new StringBuilder(s.Length);
+            foreach (char c in s.Where(c => !chars.Contains(c)))
+            {
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
         ///     Validate email address
         /// </summary>
         /// <param name="email">string email address</param>
@@ -723,6 +739,55 @@ namespace StringExtensionLibrary
             }
             return query.Split('&').Select(p => p.Split('=')).ToDictionary(
                 key => key[0].ToLower().Trim(), value => value[1]);
+        }
+
+        /// <summary>
+        ///     Reverse back or forward slashes
+        /// </summary>
+        /// <param name="val">string</param>
+        /// <param name="direction">
+        ///     0 - replace forward slash with back
+        ///     1 - replace back with forward slash
+        /// </param>
+        /// <returns></returns>
+        public static string ReverseSlash(this string val, int direction)
+        {
+            switch (direction)
+            {
+                case 0:
+                    return val.Replace(@"/", @"\");
+                case 1:
+                    return val.Replace(@"\", @"/");
+                default:
+                    return val;
+            }
+        }
+
+        /// <summary>
+        ///     Replace Line Feeds
+        /// </summary>
+        /// <param name="val">string to remove line feeds</param>
+        /// <returns>System.string</returns>
+        public static string ReplaceLineFeeds(this string val)
+        {
+            return Regex.Replace(val, @"^[\r\n]+|\.|[\r\n]+$", "");
+        }
+
+        /// <summary>
+        ///     Validates if a string is valid IPv4
+        ///     Regular expression taken from <a href="http://regexlib.com/REDetails.aspx?regexp_id=2035">Regex reference</a>
+        /// </summary>
+        /// <param name="val">string IP address</param>
+        /// <returns>true if string matches valid IP address else false</returns>
+        public static bool IsValidIPv4(this string val)
+        {
+            if (string.IsNullOrEmpty(val))
+            {
+                return false;
+            }
+            return Regex.Match(val,
+                @"(?:^|\s)([a-z]{3,6}(?=://))?(://)?((?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?))(?::(\d{2,5}))?(?:\s|$)")
+                .Success;
         }
     }
 }

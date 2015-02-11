@@ -92,6 +92,13 @@ namespace StringExtensions
     public class StringExtensionTest
     {
         [TestMethod]
+        public void TestIPv4Address()
+        {
+            Assert.IsFalse("64.233.161.1470".IsValidIPv4());
+            Assert.IsTrue("64.233.161.147".IsValidIPv4());
+        }
+
+        [TestMethod]
         public void TestQueryStringToDictionary()
         {
             const string url = "?name=ferret&field1=value1&field2=value2&field3=value3";
