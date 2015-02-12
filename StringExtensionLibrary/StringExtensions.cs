@@ -229,9 +229,34 @@ namespace StringExtensionLibrary
         /// <param name="value">A composite format string</param>
         /// <param name="arg0">An System.Object to format</param>
         /// <returns>A copy of format in which any format items are replaced by the string representation of arg0</returns>
+        /// <exception cref="ArgumentNullException">format or args is null.</exception>
+        /// <exception cref="System.FormatException">
+        ///     format is invalid.-or- The index of a format item is less than zero, or
+        ///     greater than or equal to the length of the args array.
+        /// </exception>
         public static string Format(this string value, object arg0)
         {
             return string.Format(value, arg0);
+        }
+
+        /// <summary>
+        ///     Replaces the format item in a specified string with the string representation of a corresponding object in a
+        ///     specified array.
+        /// </summary>
+        /// <param name="value">A composite format string</param>
+        /// <param name="args">An object array that contains zero or more objects to format</param>
+        /// <returns>
+        ///     A copy of format in which the format items have been replaced by the string representation of the
+        ///     corresponding objects in args
+        /// </returns>
+        /// <exception cref="ArgumentNullException">format or args is null.</exception>
+        /// <exception cref="System.FormatException">
+        ///     format is invalid.-or- The index of a format item is less than zero, or
+        ///     greater than or equal to the length of the args array.
+        /// </exception>
+        public static string Format(this string value, params object[] args)
+        {
+            return string.Format(value, args);
         }
 
         /// <summary>
@@ -788,6 +813,90 @@ namespace StringExtensionLibrary
             return Regex.Match(val,
                 @"(?:^|\s)([a-z]{3,6}(?=://))?(://)?((?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?))(?::(\d{2,5}))?(?:\s|$)")
                 .Success;
+        }
+
+        /// <summary>
+        ///     Calculates the amount of bytes occupied by the input string encoded as the encoding specified
+        /// </summary>
+        /// <param name="val">The input string to check</param>
+        /// <param name="encoding">The encoding to use</param>
+        /// <returns>The total size of the input string in bytes</returns>
+        /// <exception cref="System.ArgumentNullException">input is null</exception>
+        /// <exception cref="System.ArgumentNullException">encoding is null</exception>
+        public static int GetByteSize(this string val, Encoding encoding)
+        {
+            if (val == null)
+            {
+                throw new ArgumentNullException("val");
+            }
+            if (encoding == null)
+            {
+                throw new ArgumentNullException("encoding");
+            }
+            return encoding.GetByteCount(val);
+        }
+
+        /// <summary>
+        ///     Extracts the left part of the input string limited with the length parameter
+        /// </summary>
+        /// <param name="val">The input string to take the left part from</param>
+        /// <param name="length">The total number characters to take from the input string</param>
+        /// <returns>The substring starting at startIndex 0 until length</returns>
+        /// <exception cref="System.ArgumentNullException">input is null</exception>
+        /// <exception cref="System.ArgumentOutOfRangeException">Length is smaller than zero or higher than the length of input</exception>
+        public static string Left(this string val, int length)
+        {
+            if (string.IsNullOrEmpty(val))
+            {
+                throw new ArgumentNullException("val");
+            }
+            if (length < 0 || length > val.Length)
+            {
+                throw new ArgumentOutOfRangeException("length",
+                    "length cannot be higher than total string length or less than 0");
+            }
+            return val.Substring(0, length);
+        }
+
+        /// <summary>
+        ///     Extracts the right part of the input string limited with the length parameter
+        /// </summary>
+        /// <param name="val">The input string to take the right part from</param>
+        /// <param name="length">The total number characters to take from the input string</param>
+        /// <returns>The substring taken from the input string</returns>
+        /// <exception cref="System.ArgumentNullException">input is null</exception>
+        /// <exception cref="System.ArgumentOutOfRangeException">Length is smaller than zero or higher than the length of input</exception>
+        public static string Right(this string val, int length)
+        {
+            if (string.IsNullOrEmpty(val))
+            {
+                throw new ArgumentNullException("val");
+            }
+            if (length < 0 || length > val.Length)
+            {
+                throw new ArgumentOutOfRangeException("length",
+                    "length cannot be higher than total string length or less than 0");
+            }
+            return val.Substring(val.Length - length);
+        }
+
+        /// <summary>
+        ///     ToTextElements
+        /// </summary>
+        /// <param name="val"></param>
+        /// <returns></returns>
+        public static IEnumerable<string> ToTextElements(this string val)
+        {
+            if (val == null)
+            {
+                throw new ArgumentNullException("val");
+            }
+            TextElementEnumerator elementEnumerator = StringInfo.GetTextElementEnumerator(val);
+            while (elementEnumerator.MoveNext())
+            {
+                string textElement = elementEnumerator.GetTextElement();
+                yield return textElement;
+            }
         }
     }
 }

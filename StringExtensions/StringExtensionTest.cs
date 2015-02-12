@@ -92,6 +92,17 @@ namespace StringExtensions
     public class StringExtensionTest
     {
         [TestMethod]
+        public void ToTextElements()
+        {
+            string testing = "asdfasdf aasdflk asdfasdf";
+            IEnumerable<string> a = testing.ToTextElements();
+            foreach (string k in a)
+            {
+                Console.WriteLine(k);
+            }
+        }
+
+        [TestMethod]
         public void TestIPv4Address()
         {
             Assert.IsFalse("64.233.161.1470".IsValidIPv4());
