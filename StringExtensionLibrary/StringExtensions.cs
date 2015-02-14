@@ -664,6 +664,21 @@ namespace StringExtensionLibrary
             return val + suffix;
         }
 
+        /// <summary>
+        ///     Appends the prefix to the start of the string if the string does not already start with prefix.
+        /// </summary>
+        /// <param name="val">string to append prefix</param>
+        /// <param name="prefix">prefix</param>
+        /// <param name="ignoreCase">Indicates whether the compare should ignore case</param>
+        /// <returns></returns>
+        public static string AppendPrefixIfMissing(this string val, string prefix, bool ignoreCase = true)
+        {
+            if (string.IsNullOrEmpty(val) || (ignoreCase ? val.StartsWithIgnoreCase(prefix) : val.StartsWith(prefix)))
+            {
+                return val;
+            }
+            return prefix + val;
+        }
 
         /// <summary>
         ///     Checks if the String contains only Unicode letters.
