@@ -10,6 +10,21 @@ namespace StringExtensions
     public class StringExtensionTest
     {
         [TestMethod]
+        public void TestLength()
+        {
+            string sample = "There is currently no easy way to update all packages within a solution";
+            Assert.IsTrue(sample.IsMinLength(2));
+            sample = "The running";
+            Assert.IsFalse(sample.IsMinLength(50));
+            sample = null;
+            Assert.IsFalse(sample.IsMinLength(1));
+            sample = "One";
+            Assert.IsTrue(sample.IsMaxLength(3));
+            sample = "three";
+            Assert.IsFalse(sample.IsMaxLength(3));
+        }
+
+        [TestMethod]
         public void TestDoesNotStartWith()
         {
             Assert.IsTrue("test".DoesNotStartWith("a"));
