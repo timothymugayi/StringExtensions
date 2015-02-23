@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Security.Cryptography;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using StringExtensionLibrary;
@@ -9,6 +10,27 @@ namespace StringExtensions
     [TestClass]
     public class StringExtensionTest
     {
+        [TestMethod]
+        public void TestJsonToExpandoObject()
+        {
+            const string productString = "{'name':'Widget','expiryDate':'2010-12-20T18:01Z'," +
+                                         "'price':9.99,'sizes':['Small','Medium','Large']}";
+
+            dynamic product = productString.JsonToExpanderObject();
+            Assert.IsInstanceOfType(product, typeof (ExpandoObject));
+
+            Assert.IsNotNull(product.name);
+            Assert.IsNotNull(product.expiryDate);
+            Assert.IsNotNull(product.price);
+            Assert.IsNotNull(product.sizes);
+
+            var sizes = (List<object>) product.sizes;
+            foreach (string item in sizes)
+            {
+                Assert.IsNotNull(item);
+            }
+        }
+
         [TestMethod]
         public void TestLength()
         {

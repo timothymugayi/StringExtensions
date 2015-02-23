@@ -24,6 +24,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace StringExtensionLibrary
 {
@@ -603,24 +604,25 @@ namespace StringExtensionLibrary
         ///     Converts a Json string to ExpandoObject method applicable for multi hierarchy objects i.e
         ///     having zero or many parent child relationships
         /// </summary>
-        /// <param name="val">string formated as Json</param>
-        /// <returns>System.Dynamic.ExpandoObject Json object<see cref="ExpandoObject" /></returns>
-        public static ExpandoObject JsonToExpanderObject(this string val)
+        /// <param name="json">string formated as Json</param>
+        /// <returns>System.Dynamic.ExpandoObject Json object<see cref="ExpandoObject" />ExpandoObject</returns>
+        public static dynamic JsonToExpanderObject(this string json)
         {
-            throw new NotImplementedException();
+            var converter = new ExpandoObjectConverter();
+            return JsonConvert.DeserializeObject<ExpandoObject>(json, converter);
         }
 
         /// <summary>
         ///     Converts a Json string to object of type T method applicable for multi hierarchy objects i.e
         ///     having zero or many parent child relationships, Ignore loop references and do not serialize if cycles are detected.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="val"></param>
-        /// <returns></returns>
-        public static T JsonToObject<T>(this string val)
+        /// <typeparam name="T">object to convert to</typeparam>
+        /// <param name="json">json</param>
+        /// <returns>object</returns>
+        public static T JsonToObject<T>(this string json)
         {
             var settings = new JsonSerializerSettings {ReferenceLoopHandling = ReferenceLoopHandling.Ignore};
-            return JsonConvert.DeserializeObject<T>(val, settings);
+            return JsonConvert.DeserializeObject<T>(json, settings);
         }
 
         /// <summary>
