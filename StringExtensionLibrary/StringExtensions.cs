@@ -42,15 +42,8 @@ namespace StringExtensionLibrary
         {
             // ReSharper disable once RedundantAssignment
             DateTime dateVal = default(DateTime);
-            if (DateTime.TryParseExact(data, dateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out dateVal))
-            {
-                if (dateVal.Year < 1946)
-                {
-                    return false;
-                }
-                return true;
-            }
-            return false;
+            return DateTime.TryParseExact(data, dateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None,
+                out dateVal);
         }
 
         /// <summary>
@@ -593,9 +586,17 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string formated as Json</param>
         /// <returns>IDictionary Json object</returns>
+        /// <remarks>
+        ///     <exception cref="ArgumentNullException">if string parameter is null or empty</exception>
+        /// </remarks>
         public static IDictionary<string, object> JsonToDictionary(this string val)
         {
-            throw new NotImplementedException();
+            if (string.IsNullOrEmpty(val))
+            {
+                throw new ArgumentNullException("val");
+            }
+            return
+                (Dictionary<string, object>) JsonConvert.DeserializeObject(val, typeof (Dictionary<string, object>));
         }
 
         /// <summary>
@@ -978,6 +979,67 @@ namespace StringExtensionLibrary
         public static bool IsMaxLength(this string val, int maxCharLength)
         {
             return val != null && val.Length <= maxCharLength;
+        }
+
+        /// <summary>
+        ///     Checks if string length satisfies minimum and maximum allowable char length. does not ignore leading and
+        ///     trailing white-space
+        /// </summary>
+        /// <param name="val">string to evaluate</param>
+        /// <param name="minCharLength">minimum char length</param>
+        /// <param name="maxCharLength">maximum char length</param>
+        /// <returns>true if string satisfies minimum and maximum allowable length</returns>
+        public static bool IsLength(this string val, int minCharLength, int maxCharLength)
+        {
+            return val != null && val.Length >= minCharLength && val.Length <= minCharLength;
+        }
+
+        /// <summary>
+        ///     Gets the number of characters in string checks if string is null
+        /// </summary>
+        /// <param name="val">string to evaluate length</param>
+        /// <returns>total number of chars or null if string is null</returns>
+        public static int? GetLength(string val)
+        {
+            return val == null ? (int?) null : val.Length;
+        }
+
+        /// <summary>
+        ///     Create basic dynamic SQL where parameters from a JSON key value pair string
+        /// </summary>
+        /// <param name="value">json key value pair string</param>
+        /// <param name="useOr">if true constructs parameters using or statement if false and</param>
+        /// <returns></returns>
+        public static string CreateParameters(this string value, bool useOr)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+            IDictionary<string, object> searchParamters = value.JsonToDictionary();
+            var @params = new StringBuilder("");
+            if (searchParamters == null)
+            {
+                return @params.ToString();
+            }
+            for (int i = 0; i <= searchParamters.Count() - 1; i++)
+            {
+                string key = searchParamters.Keys.ElementAt(i);
+                var val = (string) searchParamters[key];
+                if (!string.IsNullOrEmpty(key))
+                {
+                    @params.Append(key).Append(" like '").Append(val.Trim()).Append("%' ");
+                    if (i < searchParamters.Count() - 1 && useOr)
+                    {
+                        @params.Append(" or ");
+                    }
+                    else if (i < searchParamters.Count() - 1)
+                    {
+                        @params.Append(" and ");
+                    }
+                }
+            }
+            return @params.ToString();
         }
     }
 }
