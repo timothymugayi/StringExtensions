@@ -958,6 +958,16 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
+        ///     Checks if a string is null or empty
+        /// </summary>
+        /// <param name="val">string to evaluate</param>
+        /// <returns>true if string is null or is empty else false</returns>
+        public static bool IsNullOrEmpty(this string val)
+        {
+            return String.IsNullOrEmpty(val);
+        }
+
+        /// <summary>
         ///     Checks if string length is a certain minimum number of characters, does not ignore leading and trailing
         ///     white-space.
         ///     null strings will always evaluate to false.
