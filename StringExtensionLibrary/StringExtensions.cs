@@ -328,7 +328,7 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">val</param>
         /// <returns>System.string</returns>
-        public static string FristCharacter(this string val)
+        public static string FirstCharacter(this string val)
         {
             return (!string.IsNullOrEmpty(val))
                 ? (val.Length >= 1)
