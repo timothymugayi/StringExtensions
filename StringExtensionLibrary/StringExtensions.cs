@@ -20,6 +20,8 @@ using System.Collections.Generic;
 using System.Dynamic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -33,13 +35,85 @@ namespace StringExtensionLibrary
     /// </summary>
     public static class StringExtensions
     {
+        private const int AesSaltSize = 16;
+        private const int AesIvSize = 16;
+        private const int AesKeySizeBytes = 32;
+        private const int AesHmacKeySizeBytes = 32;
+        private const int AesHmacTagSize = 32;
+        private const int AesKeyIterations = 100000;
+        private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
+
+        private static readonly Regex EmailRegex = new Regex(
+            @"^[a-zA-Z0-9][\w\.\+\-]*[a-zA-Z0-9]@[a-zA-Z0-9][\w\.\-]*[a-zA-Z0-9]\.[a-zA-Z][a-zA-Z\.]*[a-zA-Z]$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            RegexMatchTimeout);
+
+        private static readonly Regex LineFeedRegex = new Regex(
+            @"[\r\n]+",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            RegexMatchTimeout);
+
+        private static readonly char[] HexByteSeparator = { '-' };
+        private static readonly char[] QueryEqualsSeparator = { '=' };
+
+        private static byte[] DeriveBytesFromPassphrase(string password, byte[] salt, int byteCount)
+        {
+            byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
+            try
+            {
+                return Pbkdf2HmacSha256(passwordBytes, salt, AesKeyIterations, byteCount);
+            }
+            finally
+            {
+                Array.Clear(passwordBytes, 0, passwordBytes.Length);
+            }
+        }
+
+        internal static byte[] Pbkdf2HmacSha256(byte[] password, byte[] salt, int iterations, int byteCount)
+        {
+            using (var hmac = new HMACSHA256(password))
+            {
+                int hashLength = hmac.HashSize / 8;
+                int blockCount = (byteCount + hashLength - 1) / hashLength;
+                var derived = new byte[byteCount];
+                var saltAndBlock = new byte[salt.Length + 4];
+                Buffer.BlockCopy(salt, 0, saltAndBlock, 0, salt.Length);
+
+                int offset = 0;
+                for (int block = 1; block <= blockCount; block++)
+                {
+                    saltAndBlock[salt.Length] = (byte)(block >> 24);
+                    saltAndBlock[salt.Length + 1] = (byte)(block >> 16);
+                    saltAndBlock[salt.Length + 2] = (byte)(block >> 8);
+                    saltAndBlock[salt.Length + 3] = (byte)block;
+
+                    byte[] u = hmac.ComputeHash(saltAndBlock);
+                    var t = (byte[])u.Clone();
+                    for (int i = 1; i < iterations; i++)
+                    {
+                        u = hmac.ComputeHash(u);
+                        for (int j = 0; j < t.Length; j++)
+                        {
+                            t[j] ^= u[j];
+                        }
+                    }
+
+                    int toCopy = Math.Min(hashLength, byteCount - offset);
+                    Buffer.BlockCopy(t, 0, derived, offset, toCopy);
+                    offset += toCopy;
+                }
+
+                return derived;
+            }
+        }
+
         /// <summary>
         ///     Checks if date with dateFormat is parse-able to System.DateTime format returns boolean value if true else false
         /// </summary>
         /// <param name="data">String date</param>
         /// <param name="dateFormat">date format example dd/MM/yyyy HH:mm:ss</param>
         /// <returns>boolean True False if is valid System.DateTime</returns>
-        public static bool IsDateTime(this string data, string dateFormat)
+        public static bool IsDateTime(this string? data, string dateFormat)
         {
             // ReSharper disable once RedundantAssignment
             DateTime dateVal = default(DateTime);
@@ -56,10 +130,13 @@ namespace StringExtensionLibrary
         ///     The conversion fails if the string parameter is null, is not of the correct format, or represents a number
         ///     less than System.Int32.MinValue or greater than System.Int32.MaxValue
         /// </remarks>
-        public static int ToInt32(this string value)
+        public static int ToInt32(this string? value)
         {
             int number;
-            Int32.TryParse(value, out number);
+            if (!int.TryParse(value, out number))
+            {
+                return 0;
+            }
             return number;
         }
 
@@ -72,10 +149,13 @@ namespace StringExtensionLibrary
         ///     The conversion fails if the string parameter is null, is not of the correct format, or represents a number
         ///     less than System.Int64.MinValue or greater than System.Int64.MaxValue
         /// </remarks>
-        public static long ToInt64(this string value)
+        public static long ToInt64(this string? value)
         {
             long number;
-            Int64.TryParse(value, out number);
+            if (!long.TryParse(value, out number))
+            {
+                return 0;
+            }
             return number;
         }
 
@@ -88,10 +168,13 @@ namespace StringExtensionLibrary
         ///     The conversion fails if the string parameter is null, is not of the correct format, or represents a number
         ///     less than System.Int16.MinValue or greater than System.Int16.MaxValue
         /// </remarks>
-        public static short ToInt16(this string value)
+        public static short ToInt16(this string? value)
         {
             short number;
-            Int16.TryParse(value, out number);
+            if (!short.TryParse(value, out number))
+            {
+                return 0;
+            }
             return number;
         }
 
@@ -104,10 +187,13 @@ namespace StringExtensionLibrary
         ///     The conversion fails if the s parameter is null, is not a number in a valid format, or represents a number
         ///     less than System.Decimal.MinValue or greater than System.Decimal.MaxValue
         /// </remarks>
-        public static Decimal ToDecimal(this string value)
+        public static decimal ToDecimal(this string? value)
         {
-            Decimal number;
-            Decimal.TryParse(value, out number);
+            decimal number;
+            if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out number))
+            {
+                return 0;
+            }
             return number;
         }
 
@@ -124,11 +210,11 @@ namespace StringExtensionLibrary
         /// </remarks>
         public static bool ToBoolean(this string value)
         {
-            if (string.IsNullOrEmpty(value) || string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(value))
             {
-                throw new ArgumentException("value");
+                throw new ArgumentException("Value is null, empty, or whitespace.", nameof(value));
             }
-            string val = value.ToLower().Trim();
+            string val = value.ToLowerInvariant().Trim();
             switch (val)
             {
                 case "false":
@@ -148,7 +234,7 @@ namespace StringExtensionLibrary
                 case "n":
                     return false;
                 default:
-                    throw new ArgumentException("Invalid boolean");
+                    throw new ArgumentException("Value is not a recognized boolean.", nameof(value));
             }
         }
 
@@ -170,7 +256,11 @@ namespace StringExtensionLibrary
         /// </returns>
         public static IEnumerable<T> SplitTo<T>(this string str, params char[] separator) where T : IConvertible
         {
-            return str.Split(separator, StringSplitOptions.None).Select(s => (T) Convert.ChangeType(s, typeof (T)));
+            if (str == null)
+            {
+                throw new ArgumentNullException(nameof(str));
+            }
+            return str.Split(separator, StringSplitOptions.None).Select(s => (T) Convert.ChangeType(s, typeof (T), CultureInfo.InvariantCulture));
         }
 
         /// <summary>
@@ -193,7 +283,11 @@ namespace StringExtensionLibrary
         public static IEnumerable<T> SplitTo<T>(this string str, StringSplitOptions options, params char[] separator)
             where T : IConvertible
         {
-            return str.Split(separator, options).Select(s => (T) Convert.ChangeType(s, typeof (T)));
+            if (str == null)
+            {
+                throw new ArgumentNullException(nameof(str));
+            }
+            return str.Split(separator, options).Select(s => (T) Convert.ChangeType(s, typeof (T), CultureInfo.InvariantCulture));
         }
 
         /// <summary>
@@ -213,9 +307,9 @@ namespace StringExtensionLibrary
         /// </remarks>
         public static T ToEnum<T>(this string value, T defaultValue = default(T)) where T : struct
         {
-            if (!typeof (T).IsEnum)
+            if (!typeof(T).IsEnum)
             {
-                throw new ArgumentException("Type T Must of type System.Enum");
+                throw new ArgumentException("Type T must be an enum.", nameof(T));
             }
 
             T result;
@@ -225,6 +319,7 @@ namespace StringExtensionLibrary
 
         /// <summary>
         ///     Replaces one or more format items in a specified string with the string representation of a specified object.
+        ///     Named <c>Format</c> as an extension; call as <c>"{0}".Format(arg)</c> to avoid ambiguity with <see cref="string.Format(string,object)" />.
         /// </summary>
         /// <param name="value">A composite format string</param>
         /// <param name="arg0">An System.Object to format</param>
@@ -236,7 +331,7 @@ namespace StringExtensionLibrary
         /// </exception>
         public static string Format(this string value, object arg0)
         {
-            return string.Format(value, arg0);
+            return string.Format(CultureInfo.InvariantCulture, value, arg0);
         }
 
         /// <summary>
@@ -256,7 +351,7 @@ namespace StringExtensionLibrary
         /// </exception>
         public static string Format(this string value, params object[] args)
         {
-            return string.Format(value, args);
+            return string.Format(CultureInfo.InvariantCulture, value, args);
         }
 
         /// <summary>
@@ -265,7 +360,7 @@ namespace StringExtensionLibrary
         /// <param name="val">val</param>
         /// <returns>System.String</returns>
         /// <remarks></remarks>
-        public static string GetEmptyStringIfNull(this string val)
+        public static string GetEmptyStringIfNull(this string? val)
         {
             return (val != null ? val.Trim() : "");
         }
@@ -276,7 +371,7 @@ namespace StringExtensionLibrary
         /// <param name="myValue">String value</param>
         /// <returns>null/nothing if String IsEmpty</returns>
         /// <remarks></remarks>
-        public static string GetNullIfEmptyString(this string myValue)
+        public static string? GetNullIfEmptyString(this string? myValue)
         {
             if (myValue == null || myValue.Length <= 0)
             {
@@ -295,7 +390,7 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">val</param>
         /// <returns>Boolean True if isInteger else False</returns>
-        public static bool IsInteger(this string val)
+        public static bool IsInteger(this string? val)
         {
             // Variable to collect the Return value of the TryParse method.
 
@@ -309,18 +404,17 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
-        ///     Read in a sequence of words from standard input and capitalize each
-        ///     one (make first letter uppercase; make rest lowercase).
+        ///     Capitalizes the first character and lowercases the remainder. Null and empty strings are returned unchanged.
         /// </summary>
         /// <param name="s">string</param>
         /// <returns>Word with capitalization</returns>
-        public static string Capitalize(this string s)
+        public static string? Capitalize(this string? s)
         {
-            if (s.Length == 0)
+            if (s is null || s.Length == 0)
             {
                 return s;
             }
-            return s.Substring(0, 1).ToUpper() + s.Substring(1).ToLower();
+            return s.Substring(0, 1).ToUpperInvariant() + s.Substring(1).ToLowerInvariant();
         }
 
         /// <summary>
@@ -328,13 +422,13 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">val</param>
         /// <returns>System.string</returns>
-        public static string FirstCharacter(this string val)
+        public static string? FirstCharacter(this string? val)
         {
-            return (!string.IsNullOrEmpty(val))
-                ? (val.Length >= 1)
-                    ? val.Substring(0, 1)
-                    : val
-                : null;
+            if (val is null || val.Length == 0)
+            {
+                return null;
+            }
+            return val.Substring(0, 1);
         }
 
         /// <summary>
@@ -342,13 +436,13 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">val</param>
         /// <returns>System.string</returns>
-        public static string LastCharacter(this string val)
+        public static string? LastCharacter(this string? val)
         {
-            return (!string.IsNullOrEmpty(val))
-                ? (val.Length >= 1)
-                    ? val.Substring(val.Length - 1, 1)
-                    : val
-                : null;
+            if (val is null || val.Length == 0)
+            {
+                return null;
+            }
+            return val.Substring(val.Length - 1, 1);
         }
 
         /// <summary>
@@ -361,11 +455,11 @@ namespace StringExtensionLibrary
         {
             if (val == null)
             {
-                throw new ArgumentNullException("val", "val parameter is null");
+                throw new ArgumentNullException(nameof(val));
             }
             if (suffix == null)
             {
-                throw new ArgumentNullException("suffix", "suffix parameter is null");
+                throw new ArgumentNullException(nameof(suffix));
             }
             if (val.Length < suffix.Length)
             {
@@ -384,11 +478,11 @@ namespace StringExtensionLibrary
         {
             if (val == null)
             {
-                throw new ArgumentNullException("val", "val parameter is null");
+                throw new ArgumentNullException(nameof(val));
             }
             if (prefix == null)
             {
-                throw new ArgumentNullException("prefix", "prefix parameter is null");
+                throw new ArgumentNullException(nameof(prefix));
             }
             if (val.Length < prefix.Length)
             {
@@ -398,7 +492,8 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
-        ///     Replace specified characters with an empty string.
+        ///     Replace specified characters with an empty string. This overload is distinct from
+        ///     <see cref="string.Replace(char,char)" />: it deletes each listed character rather than substituting a replacement.
         /// </summary>
         /// <param name="s">the string</param>
         /// <param name="chars">list of characters to replace from the string</param>
@@ -409,6 +504,14 @@ namespace StringExtensionLibrary
         /// <returns>System.string</returns>
         public static string Replace(this string s, params char[] chars)
         {
+            if (s == null)
+            {
+                throw new ArgumentNullException(nameof(s));
+            }
+            if (chars == null)
+            {
+                throw new ArgumentNullException(nameof(chars));
+            }
             return chars.Aggregate(s, (current, c) => current.Replace(c.ToString(CultureInfo.InvariantCulture), ""));
         }
 
@@ -420,6 +523,14 @@ namespace StringExtensionLibrary
         /// <returns>System.string</returns>
         public static string RemoveChars(this string s, params char[] chars)
         {
+            if (s == null)
+            {
+                throw new ArgumentNullException(nameof(s));
+            }
+            if (chars == null)
+            {
+                throw new ArgumentNullException(nameof(chars));
+            }
             var sb = new StringBuilder(s.Length);
             foreach (char c in s.Where(c => !chars.Contains(c)))
             {
@@ -429,15 +540,32 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
-        ///     Validate email address
+        ///     Practical email check (allows plus-tags). Not RFC 5322-complete; do not use as the sole
+        ///     gate for security-sensitive identity.
         /// </summary>
         /// <param name="email">string email address</param>
         /// <returns>true or false if email if valid</returns>
-        public static bool IsEmailAddress(this string email)
+        public static bool IsEmailAddress(this string? email)
         {
-            string pattern =
-                "^[a-zA-Z][\\w\\.-]*[a-zA-Z0-9]@[a-zA-Z0-9][\\w\\.-]*[a-zA-Z0-9]\\.[a-zA-Z][a-zA-Z\\.]*[a-zA-Z]$";
-            return Regex.Match(email, pattern).Success;
+            if (email is null)
+            {
+                return false;
+            }
+
+            string candidate = email.Trim();
+            if (candidate.Length == 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                return EmailRegex.IsMatch(candidate);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -446,7 +574,7 @@ namespace StringExtensionLibrary
         /// <param name="val"></param>
         /// <returns>Boolean True if isNumeric else False</returns>
         /// <remarks></remarks>
-        public static bool IsNumeric(this string val)
+        public static bool IsNumeric(this string? val)
         {
             // Variable to collect the Return value of the TryParse method.
 
@@ -466,9 +594,9 @@ namespace StringExtensionLibrary
         /// <param name="maxLength">number of chars to truncate</param>
         /// <returns></returns>
         /// <remarks></remarks>
-        public static string Truncate(this string s, int maxLength)
+        public static string Truncate(this string? s, int maxLength)
         {
-            if (String.IsNullOrEmpty(s) || maxLength <= 0)
+            if (s is null || s.Length == 0 || maxLength <= 0)
             {
                 return String.Empty;
             }
@@ -486,23 +614,29 @@ namespace StringExtensionLibrary
         /// <param name="defaultValue">default value to return if String value isEmpty</param>
         /// <returns>returns either String value or default value if IsEmpty</returns>
         /// <remarks></remarks>
-        public static string GetDefaultIfEmpty(this string myValue, string defaultValue)
+        public static string GetDefaultIfEmpty(this string? myValue, string defaultValue)
         {
-            if (!String.IsNullOrEmpty(myValue))
+            if (myValue is null || myValue.Length == 0)
             {
-                myValue = myValue.Trim();
-                return myValue.Length > 0 ? myValue : defaultValue;
+                return defaultValue;
             }
-            return defaultValue;
+
+            myValue = myValue.Trim();
+            return myValue.Length > 0 ? myValue : defaultValue;
         }
 
         /// <summary>
-        ///     Convert a string to its equivalent byte array
+        ///     Convert a string to its equivalent UTF-16 little-endian byte array (each char is two bytes via
+        ///     <see cref="Buffer.BlockCopy(Array,int,Array,int,int)" />). This is not UTF-8. Hash helpers use the same encoding.
         /// </summary>
         /// <param name="val">string to convert</param>
         /// <returns>System.byte array</returns>
         public static byte[] ToBytes(this string val)
         {
+            if (val == null)
+            {
+                throw new ArgumentNullException(nameof(val));
+            }
             var bytes = new byte[val.Length*sizeof (char)];
             Buffer.BlockCopy(val.ToCharArray(), 0, bytes, 0, bytes.Length);
             return bytes;
@@ -515,6 +649,10 @@ namespace StringExtensionLibrary
         /// <returns>System.string</returns>
         public static string Reverse(this string val)
         {
+            if (val == null)
+            {
+                throw new ArgumentNullException(nameof(val));
+            }
             var chars = new char[val.Length];
             for (int i = val.Length - 1, j = 0; i >= 0; --i, ++j)
             {
@@ -530,44 +668,188 @@ namespace StringExtensionLibrary
         /// <param name="val">val</param>
         /// <returns></returns>
         /// <remarks></remarks>
-        public static string ParseStringToCsv(this string val)
+        public static string ParseStringToCsv(this string? val)
         {
             return '"' + GetEmptyStringIfNull(val).Replace("\"", "\"\"") + '"';
         }
 
         /// <summary>
-        ///     Encrypt a string using the supplied key. Encoding is done using RSA encryption.
+        ///     Encrypt a string using the supplied passphrase. Encoding uses AES-256-CBC with HMAC-SHA256
+        ///     integrity and a PBKDF2-HMAC-SHA256-derived key (100,000 iterations).
+        ///     The result is a hyphen-separated hex string (salt + IV + ciphertext + tag).
+        ///     Passphrase-based authenticated encryption for application data; not a key-management system.
         /// </summary>
         /// <param name="stringToEncrypt">String that must be encrypted.</param>
-        /// <param name="key">Encryption key</param>
-        /// <returns>A string representing a byte array separated by a minus sign.</returns>
+        /// <param name="key">Passphrase used to derive the encryption key.</param>
+        /// <returns>A hyphen-separated hex string representing salt, IV, ciphertext, and HMAC tag.</returns>
         /// <exception cref="ArgumentException">Occurs when stringToEncrypt or key is null or empty.</exception>
         public static string Encrypt(this string stringToEncrypt, string key)
         {
-            var cspParameter = new CspParameters {KeyContainerName = key};
-            var rsaServiceProvider = new RSACryptoServiceProvider(cspParameter) {PersistKeyInCsp = true};
-            byte[] bytes = rsaServiceProvider.Encrypt(Encoding.UTF8.GetBytes(stringToEncrypt), true);
-            return BitConverter.ToString(bytes);
+            if (string.IsNullOrEmpty(stringToEncrypt))
+            {
+                throw new ArgumentException("Value is null or empty.", nameof(stringToEncrypt));
+            }
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ArgumentException("Value is null or empty.", nameof(key));
+            }
+
+            var salt = new byte[AesSaltSize];
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(salt);
+            }
+
+            byte[] derivedBytes = DeriveBytesFromPassphrase(key, salt, AesKeySizeBytes + AesHmacKeySizeBytes);
+            var aesKey = new byte[AesKeySizeBytes];
+            var hmacKey = new byte[AesHmacKeySizeBytes];
+            try
+            {
+                Buffer.BlockCopy(derivedBytes, 0, aesKey, 0, aesKey.Length);
+                Buffer.BlockCopy(derivedBytes, aesKey.Length, hmacKey, 0, hmacKey.Length);
+
+                using (Aes aes = Aes.Create())
+                {
+                    aes.KeySize = 256;
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+                    aes.Key = aesKey;
+                    aes.GenerateIV();
+
+                    using (ICryptoTransform encryptor = aes.CreateEncryptor())
+                    {
+                        byte[] plainBytes = Encoding.UTF8.GetBytes(stringToEncrypt);
+                        byte[] cipherBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+                        var payload = new byte[salt.Length + aes.IV.Length + cipherBytes.Length];
+                        Buffer.BlockCopy(salt, 0, payload, 0, salt.Length);
+                        Buffer.BlockCopy(aes.IV, 0, payload, salt.Length, aes.IV.Length);
+                        Buffer.BlockCopy(cipherBytes, 0, payload, salt.Length + aes.IV.Length, cipherBytes.Length);
+
+                        byte[] tag;
+                        using (var hmac = new HMACSHA256(hmacKey))
+                        {
+                            tag = hmac.ComputeHash(payload);
+                        }
+
+                        var result = new byte[payload.Length + tag.Length];
+                        Buffer.BlockCopy(payload, 0, result, 0, payload.Length);
+                        Buffer.BlockCopy(tag, 0, result, payload.Length, tag.Length);
+                        return BitConverter.ToString(result);
+                    }
+                }
+            }
+            finally
+            {
+                Array.Clear(derivedBytes, 0, derivedBytes.Length);
+                Array.Clear(aesKey, 0, aesKey.Length);
+                Array.Clear(hmacKey, 0, hmacKey.Length);
+            }
         }
 
-
         /// <summary>
-        ///     Decrypt a string using the supplied key. Decoding is done using RSA encryption.
+        ///     Decrypt a string using the supplied passphrase. Decoding uses AES-256-CBC with HMAC-SHA256
+        ///     and a PBKDF2-HMAC-SHA256-derived key.
         /// </summary>
-        /// <param name="stringToDecrypt">String that must be decrypted.</param>
-        /// <param name="key">Decryption key.</param>
-        /// <returns>The decrypted string or null if decryption failed.</returns>
+        /// <param name="stringToDecrypt">Hyphen-separated hex string produced by <see cref="Encrypt" />.</param>
+        /// <param name="key">Passphrase used to derive the decryption key.</param>
+        /// <returns>The decrypted string.</returns>
         /// <exception cref="ArgumentException">Occurs when stringToDecrypt or key is null or empty.</exception>
+        /// <exception cref="CryptographicException">Occurs when the payload is invalid or the key is wrong.</exception>
         public static string Decrypt(this string stringToDecrypt, string key)
         {
-            var cspParamters = new CspParameters {KeyContainerName = key};
-            var rsaServiceProvider = new RSACryptoServiceProvider(cspParamters) {PersistKeyInCsp = true};
-            string[] decryptArray = stringToDecrypt.Split(new[] {"-"}, StringSplitOptions.None);
-            byte[] decryptByteArray = Array.ConvertAll(decryptArray,
-                (s => Convert.ToByte(byte.Parse(s, NumberStyles.HexNumber))));
-            byte[] bytes = rsaServiceProvider.Decrypt(decryptByteArray, true);
-            string result = Encoding.UTF8.GetString(bytes);
-            return result;
+            if (string.IsNullOrEmpty(stringToDecrypt))
+            {
+                throw new ArgumentException("Value is null or empty.", nameof(stringToDecrypt));
+            }
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ArgumentException("Value is null or empty.", nameof(key));
+            }
+
+            byte[] fullBytes;
+            try
+            {
+                fullBytes = Array.ConvertAll(stringToDecrypt.Split(HexByteSeparator, StringSplitOptions.None),
+                    hex => byte.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex) when (ex is FormatException || ex is OverflowException || ex is ArgumentException)
+            {
+                throw new CryptographicException("Invalid encrypted string.", ex);
+            }
+            int minLength = AesSaltSize + AesIvSize + AesHmacTagSize;
+            if (fullBytes.Length < minLength)
+            {
+                throw new CryptographicException("Invalid encrypted string.");
+            }
+
+            var payload = new byte[fullBytes.Length - AesHmacTagSize];
+            var tag = new byte[AesHmacTagSize];
+            Buffer.BlockCopy(fullBytes, 0, payload, 0, payload.Length);
+            Buffer.BlockCopy(fullBytes, payload.Length, tag, 0, tag.Length);
+
+            var salt = new byte[AesSaltSize];
+            Buffer.BlockCopy(payload, 0, salt, 0, salt.Length);
+
+            byte[] derivedBytes = DeriveBytesFromPassphrase(key, salt, AesKeySizeBytes + AesHmacKeySizeBytes);
+            var aesKey = new byte[AesKeySizeBytes];
+            var hmacKey = new byte[AesHmacKeySizeBytes];
+            try
+            {
+                Buffer.BlockCopy(derivedBytes, 0, aesKey, 0, aesKey.Length);
+                Buffer.BlockCopy(derivedBytes, aesKey.Length, hmacKey, 0, hmacKey.Length);
+
+                byte[] expectedTag;
+                using (var hmac = new HMACSHA256(hmacKey))
+                {
+                    expectedTag = hmac.ComputeHash(payload);
+                }
+
+                if (!FixedTimeEquals(tag, expectedTag))
+                {
+                    throw new CryptographicException("Invalid encrypted string or key.");
+                }
+
+                var iv = new byte[AesIvSize];
+                var cipherBytes = new byte[payload.Length - AesSaltSize - AesIvSize];
+                Buffer.BlockCopy(payload, salt.Length, iv, 0, iv.Length);
+                Buffer.BlockCopy(payload, salt.Length + iv.Length, cipherBytes, 0, cipherBytes.Length);
+
+                using (Aes aes = Aes.Create())
+                {
+                    aes.KeySize = 256;
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+                    aes.Key = aesKey;
+                    aes.IV = iv;
+
+                    using (ICryptoTransform decryptor = aes.CreateDecryptor())
+                    {
+                        byte[] plainBytes = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
+                        return Encoding.UTF8.GetString(plainBytes);
+                    }
+                }
+            }
+            finally
+            {
+                Array.Clear(derivedBytes, 0, derivedBytes.Length);
+                Array.Clear(aesKey, 0, aesKey.Length);
+                Array.Clear(hmacKey, 0, hmacKey.Length);
+            }
+        }
+
+        private static bool FixedTimeEquals(byte[] a, byte[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length)
+            {
+                return false;
+            }
+
+            int diff = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                diff |= a[i] ^ b[i];
+            }
+            return diff == 0;
         }
 
         /// <summary>
@@ -576,9 +858,14 @@ namespace StringExtensionLibrary
         /// <param name="val">string containing text</param>
         /// <param name="stringToMatch">string or pattern find</param>
         /// <returns></returns>
-        public static int CountOccurrences(this string val, string stringToMatch)
+        public static int CountOccurrences(this string? val, string? stringToMatch)
         {
-            return Regex.Matches(val, stringToMatch, RegexOptions.IgnoreCase).Count;
+            if (string.IsNullOrEmpty(val) || string.IsNullOrEmpty(stringToMatch))
+            {
+                return 0;
+            }
+
+            return Regex.Matches(val, Regex.Escape(stringToMatch), RegexOptions.IgnoreCase, RegexMatchTimeout).Count;
         }
 
         /// <summary>
@@ -594,10 +881,14 @@ namespace StringExtensionLibrary
         {
             if (string.IsNullOrEmpty(val))
             {
-                throw new ArgumentNullException("val");
+                throw new ArgumentNullException(nameof(val));
             }
-            return
-                (Dictionary<string, object>) JsonConvert.DeserializeObject(val, typeof (Dictionary<string, object>));
+            Dictionary<string, object>? result = JsonConvert.DeserializeObject<Dictionary<string, object>>(val);
+            if (result == null)
+            {
+                throw new InvalidOperationException("JSON did not deserialize to a dictionary.");
+            }
+            return result;
         }
 
         /// <summary>
@@ -606,10 +897,11 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="json">string formated as Json</param>
         /// <returns>System.Dynamic.ExpandoObject Json object<see cref="ExpandoObject" />ExpandoObject</returns>
-        public static dynamic JsonToExpanderObject(this string json)
+        public static ExpandoObject JsonToExpanderObject(this string json)
         {
             var converter = new ExpandoObjectConverter();
-            return JsonConvert.DeserializeObject<ExpandoObject>(json, converter);
+            return JsonConvert.DeserializeObject<ExpandoObject>(json, converter)
+                   ?? throw new InvalidOperationException("JSON did not deserialize to an ExpandoObject.");
         }
 
         /// <summary>
@@ -622,7 +914,8 @@ namespace StringExtensionLibrary
         public static T JsonToObject<T>(this string json)
         {
             var settings = new JsonSerializerSettings {ReferenceLoopHandling = ReferenceLoopHandling.Ignore};
-            return JsonConvert.DeserializeObject<T>(json, settings);
+            return JsonConvert.DeserializeObject<T>(json, settings)
+                   ?? throw new InvalidOperationException("JSON did not deserialize to the requested type.");
         }
 
         /// <summary>
@@ -632,9 +925,13 @@ namespace StringExtensionLibrary
         /// <param name="prefix">prefix</param>
         /// <param name="ignoreCase">Indicates whether the compare should ignore case</param>
         /// <returns>trimmed string with no prefix or original string</returns>
-        public static string RemovePrefix(this string val, string prefix, bool ignoreCase = true)
+        public static string? RemovePrefix(this string? val, string prefix, bool ignoreCase = true)
         {
-            if (!string.IsNullOrEmpty(val) && (ignoreCase ? val.StartsWithIgnoreCase(prefix) : val.StartsWith(prefix)))
+            if (val is null || val.Length == 0)
+            {
+                return val;
+            }
+            if (ignoreCase ? val.StartsWithIgnoreCase(prefix) : val.StartsWith(prefix, StringComparison.Ordinal))
             {
                 return val.Substring(prefix.Length, val.Length - prefix.Length);
             }
@@ -648,13 +945,17 @@ namespace StringExtensionLibrary
         /// <param name="suffix">suffix</param>
         /// <param name="ignoreCase">Indicates whether the compare should ignore case</param>
         /// <returns>trimmed string with no suffix or original string</returns>
-        public static string RemoveSuffix(this string val, string suffix, bool ignoreCase = true)
+        public static string? RemoveSuffix(this string? val, string suffix, bool ignoreCase = true)
         {
-            if (!string.IsNullOrEmpty(val) && (ignoreCase ? val.EndsWithIgnoreCase(suffix) : val.EndsWith(suffix)))
+            if (val is null || val.Length == 0)
+            {
+                return val;
+            }
+            if (ignoreCase ? val.EndsWithIgnoreCase(suffix) : val.EndsWith(suffix, StringComparison.Ordinal))
             {
                 return val.Substring(0, val.Length - suffix.Length);
             }
-            return null;
+            return val;
         }
 
         /// <summary>
@@ -663,10 +964,14 @@ namespace StringExtensionLibrary
         /// <param name="val">string to append suffix</param>
         /// <param name="suffix">suffix</param>
         /// <param name="ignoreCase">Indicates whether the compare should ignore case</param>
-        /// <returns></returns>
-        public static string AppendSuffixIfMissing(this string val, string suffix, bool ignoreCase = true)
+        /// <returns>The original string, or the string with suffix appended.</returns>
+        public static string? AppendSuffixIfMissing(this string? val, string suffix, bool ignoreCase = true)
         {
-            if (string.IsNullOrEmpty(val) || (ignoreCase ? val.EndsWithIgnoreCase(suffix) : val.EndsWith(suffix)))
+            if (val is null || val.Length == 0)
+            {
+                return val;
+            }
+            if (ignoreCase ? val.EndsWithIgnoreCase(suffix) : val.EndsWith(suffix, StringComparison.Ordinal))
             {
                 return val;
             }
@@ -680,9 +985,13 @@ namespace StringExtensionLibrary
         /// <param name="prefix">prefix</param>
         /// <param name="ignoreCase">Indicates whether the compare should ignore case</param>
         /// <returns></returns>
-        public static string AppendPrefixIfMissing(this string val, string prefix, bool ignoreCase = true)
+        public static string? AppendPrefixIfMissing(this string? val, string prefix, bool ignoreCase = true)
         {
-            if (string.IsNullOrEmpty(val) || (ignoreCase ? val.StartsWithIgnoreCase(prefix) : val.StartsWith(prefix)))
+            if (val is null || val.Length == 0)
+            {
+                return val;
+            }
+            if (ignoreCase ? val.StartsWithIgnoreCase(prefix) : val.StartsWith(prefix, StringComparison.Ordinal))
             {
                 return val;
             }
@@ -695,9 +1004,9 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to check if is Alpha</param>
         /// <returns>true if only contains letters, and is non-null</returns>
-        public static bool IsAlpha(this string val)
+        public static bool IsAlpha(this string? val)
         {
-            if (string.IsNullOrEmpty(val))
+            if (val is null || val.Length == 0)
             {
                 return false;
             }
@@ -710,9 +1019,9 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to check if is Alpha or Numeric</param>
         /// <returns></returns>
-        public static bool IsAlphaNumeric(this string val)
+        public static bool IsAlphaNumeric(this string? val)
         {
-            if (string.IsNullOrEmpty(val))
+            if (val is null || val.Length == 0)
             {
                 return false;
             }
@@ -725,11 +1034,11 @@ namespace StringExtensionLibrary
         /// <param name="val">string to hash</param>
         /// <returns>Hashed string</returns>
         /// <exception cref="ArgumentException"></exception>
-        public static string CreateHashSha512(string val)
+        public static string CreateHashSha512(this string val)
         {
             if (string.IsNullOrEmpty(val))
             {
-                throw new ArgumentException("val");
+                throw new ArgumentException("Value is null or empty.", nameof(val));
             }
             var sb = new StringBuilder();
             using (SHA512 hash = SHA512.Create())
@@ -737,7 +1046,7 @@ namespace StringExtensionLibrary
                 byte[] data = hash.ComputeHash(val.ToBytes());
                 foreach (byte b in data)
                 {
-                    sb.Append(b.ToString("x2"));
+                    sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
                 }
             }
             return sb.ToString();
@@ -748,11 +1057,11 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to hash</param>
         /// <returns>Hashed string</returns>
-        public static string CreateHashSha256(string val)
+        public static string CreateHashSha256(this string val)
         {
             if (string.IsNullOrEmpty(val))
             {
-                throw new ArgumentException("val");
+                throw new ArgumentException("Value is null or empty.", nameof(val));
             }
             var sb = new StringBuilder();
             using (SHA256 hash = SHA256.Create())
@@ -760,34 +1069,74 @@ namespace StringExtensionLibrary
                 byte[] data = hash.ComputeHash(val.ToBytes());
                 foreach (byte b in data)
                 {
-                    sb.Append(b.ToString("x2"));
+                    sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
                 }
             }
             return sb.ToString();
         }
 
         /// <summary>
-        ///     Convert url query string to IDictionary value key pair
+        ///     Convert url query string to IDictionary value key pair. Keys and values are URL-decoded
+        ///     (<see cref="Uri.UnescapeDataString" />; <c>+</c> is treated as a space).
         /// </summary>
         /// <param name="queryString">query string value</param>
         /// <returns>IDictionary value key pair</returns>
-        public static IDictionary<string, string> QueryStringToDictionary(this string queryString)
+        public static IDictionary<string, string>? QueryStringToDictionary(this string? queryString)
         {
-            if (string.IsNullOrWhiteSpace(queryString))
+            if (queryString is null || queryString.Trim().Length == 0)
             {
                 return null;
             }
-            if (!queryString.Contains("?"))
+
+            int queryStart = queryString.IndexOf('?');
+            if (queryStart < 0 || queryStart == queryString.Length - 1)
             {
                 return null;
             }
-            string query = queryString.Replace("?", "");
-            if (!query.Contains("="))
+
+            string query = queryString.Substring(queryStart + 1);
+            int fragment = query.IndexOf('#');
+            if (fragment >= 0)
+            {
+                query = query.Substring(0, fragment);
+            }
+
+            if (query.IndexOf('=') < 0)
             {
                 return null;
             }
-            return query.Split('&').Select(p => p.Split('=')).ToDictionary(
-                key => key[0].ToLower().Trim(), value => value[1]);
+
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (string pair in query.Split('&'))
+            {
+                string[] parts = pair.Split(QueryEqualsSeparator, 2);
+                if (parts.Length != 2 || string.IsNullOrEmpty(parts[0]))
+                {
+                    continue;
+                }
+
+                string key = DecodeQueryComponent(parts[0]).ToLowerInvariant().Trim();
+                if (key.Length == 0)
+                {
+                    continue;
+                }
+
+                result[key] = DecodeQueryComponent(parts[1]);
+            }
+
+            return result;
+        }
+
+        private static string DecodeQueryComponent(string value)
+        {
+            try
+            {
+                return Uri.UnescapeDataString(value.Replace("+", " "));
+            }
+            catch (UriFormatException)
+            {
+                return value.Replace("+", " ");
+            }
         }
 
         /// <summary>
@@ -801,6 +1150,10 @@ namespace StringExtensionLibrary
         /// <returns></returns>
         public static string ReverseSlash(this string val, int direction)
         {
+            if (val == null)
+            {
+                throw new ArgumentNullException(nameof(val));
+            }
             switch (direction)
             {
                 case 0:
@@ -813,30 +1166,47 @@ namespace StringExtensionLibrary
         }
 
         /// <summary>
-        ///     Replace Line Feeds
+        ///     Replace CR/LF sequences with an empty string. Periods and other characters are left unchanged.
         /// </summary>
         /// <param name="val">string to remove line feeds</param>
         /// <returns>System.string</returns>
         public static string ReplaceLineFeeds(this string val)
         {
-            return Regex.Replace(val, @"^[\r\n]+|\.|[\r\n]+$", "");
+            if (val == null)
+            {
+                throw new ArgumentNullException(nameof(val));
+            }
+            return LineFeedRegex.Replace(val, "");
         }
 
         /// <summary>
-        ///     Validates if a string is valid IPv4
-        ///     Regular expression taken from <a href="http://regexlib.com/REDetails.aspx?regexp_id=2035">Regex reference</a>
+        ///     Validates if a string is a dotted-quad IPv4 address.
         /// </summary>
         /// <param name="val">string IP address</param>
         /// <returns>true if string matches valid IP address else false</returns>
-        public static bool IsValidIPv4(this string val)
+        public static bool IsValidIPv4(this string? val)
         {
-            if (string.IsNullOrEmpty(val))
+            if (val is null)
             {
                 return false;
             }
-            return Regex.Match(val,
-                @"(?:^|\s)([a-z]{3,6}(?=://))?(://)?((?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?))(?::(\d{2,5}))?(?:\s|$)")
-                .Success;
+
+            string trimmed = val.Trim();
+            if (trimmed.Length == 0)
+            {
+                return false;
+            }
+
+            string[] octets = trimmed.Split('.');
+            if (octets.Length != 4)
+            {
+                return false;
+            }
+
+            return IPAddress.TryParse(trimmed, out IPAddress? address)
+                   && address != null
+                   && address.AddressFamily == AddressFamily.InterNetwork
+                   && string.Equals(address.ToString(), trimmed, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -851,11 +1221,11 @@ namespace StringExtensionLibrary
         {
             if (val == null)
             {
-                throw new ArgumentNullException("val");
+                throw new ArgumentNullException(nameof(val));
             }
             if (encoding == null)
             {
-                throw new ArgumentNullException("encoding");
+                throw new ArgumentNullException(nameof(encoding));
             }
             return encoding.GetByteCount(val);
         }
@@ -872,11 +1242,11 @@ namespace StringExtensionLibrary
         {
             if (string.IsNullOrEmpty(val))
             {
-                throw new ArgumentNullException("val");
+                throw new ArgumentNullException(nameof(val));
             }
             if (length < 0 || length > val.Length)
             {
-                throw new ArgumentOutOfRangeException("length",
+                throw new ArgumentOutOfRangeException(nameof(length),
                     "length cannot be higher than total string length or less than 0");
             }
             return val.Substring(0, length);
@@ -894,11 +1264,11 @@ namespace StringExtensionLibrary
         {
             if (string.IsNullOrEmpty(val))
             {
-                throw new ArgumentNullException("val");
+                throw new ArgumentNullException(nameof(val));
             }
             if (length < 0 || length > val.Length)
             {
-                throw new ArgumentOutOfRangeException("length",
+                throw new ArgumentOutOfRangeException(nameof(length),
                     "length cannot be higher than total string length or less than 0");
             }
             return val.Substring(val.Length - length);
@@ -913,7 +1283,7 @@ namespace StringExtensionLibrary
         {
             if (val == null)
             {
-                throw new ArgumentNullException("val");
+                throw new ArgumentNullException(nameof(val));
             }
             TextElementEnumerator elementEnumerator = StringInfo.GetTextElementEnumerator(val);
             while (elementEnumerator.MoveNext())
@@ -928,8 +1298,8 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to evaluate</param>
         /// <param name="prefix">prefix</param>
-        /// <returns>true if string does not match prefix else false, null values will always evaluate to false</returns>
-        public static bool DoesNotStartWith(this string val, string prefix)
+        /// <returns>true if string does not match prefix else false; null <paramref name="val"/> or <paramref name="prefix"/> evaluates to true.</returns>
+        public static bool DoesNotStartWith(this string? val, string? prefix)
         {
             return val == null || prefix == null ||
                    !val.StartsWith(prefix, StringComparison.InvariantCulture);
@@ -940,8 +1310,8 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to evaluate</param>
         /// <param name="suffix">suffix</param>
-        /// <returns>true if string does not match prefix else false, null values will always evaluate to false</returns>
-        public static bool DoesNotEndWith(this string val, string suffix)
+        /// <returns>true if string does not match suffix else false; null <paramref name="val"/> or <paramref name="suffix"/> evaluates to true.</returns>
+        public static bool DoesNotEndWith(this string? val, string? suffix)
         {
             return val == null || suffix == null ||
                    !val.EndsWith(suffix, StringComparison.InvariantCulture);
@@ -952,17 +1322,18 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to evaluate</param>
         /// <returns>true if string is null else false</returns>
-        public static bool IsNull(this string val)
+        public static bool IsNull(this string? val)
         {
             return val == null;
         }
 
         /// <summary>
-        ///     Checks if a string is null or empty
+        ///     Checks if a string is null or empty. Instance-style wrapper around
+        ///     <see cref="string.IsNullOrEmpty" />; prefer the static method in new code if both are in scope.
         /// </summary>
         /// <param name="val">string to evaluate</param>
         /// <returns>true if string is null or is empty else false</returns>
-        public static bool IsNullOrEmpty(this string val)
+        public static bool IsNullOrEmpty(this string? val)
         {
             return String.IsNullOrEmpty(val);
         }
@@ -975,7 +1346,7 @@ namespace StringExtensionLibrary
         /// <param name="val">string to evaluate minimum length</param>
         /// <param name="minCharLength">minimum allowable string length</param>
         /// <returns>true if string is of specified minimum length</returns>
-        public static bool IsMinLength(this string val, int minCharLength)
+        public static bool IsMinLength(this string? val, int minCharLength)
         {
             return val != null && val.Length >= minCharLength;
         }
@@ -988,7 +1359,7 @@ namespace StringExtensionLibrary
         /// <param name="val">string to evaluate maximum length</param>
         /// <param name="maxCharLength">maximum allowable string length</param>
         /// <returns>true if string has specified maximum char length</returns>
-        public static bool IsMaxLength(this string val, int maxCharLength)
+        public static bool IsMaxLength(this string? val, int maxCharLength)
         {
             return val != null && val.Length <= maxCharLength;
         }
@@ -1001,9 +1372,9 @@ namespace StringExtensionLibrary
         /// <param name="minCharLength">minimum char length</param>
         /// <param name="maxCharLength">maximum char length</param>
         /// <returns>true if string satisfies minimum and maximum allowable length</returns>
-        public static bool IsLength(this string val, int minCharLength, int maxCharLength)
+        public static bool IsLength(this string? val, int minCharLength, int maxCharLength)
         {
-            return val != null && val.Length >= minCharLength && val.Length <= minCharLength;
+            return val != null && val.Length >= minCharLength && val.Length <= maxCharLength;
         }
 
         /// <summary>
@@ -1011,47 +1382,9 @@ namespace StringExtensionLibrary
         /// </summary>
         /// <param name="val">string to evaluate length</param>
         /// <returns>total number of chars or null if string is null</returns>
-        public static int? GetLength(string val)
+        public static int? GetLength(this string? val)
         {
             return val == null ? (int?) null : val.Length;
-        }
-
-        /// <summary>
-        ///     Create basic dynamic SQL where parameters from a JSON key value pair string
-        /// </summary>
-        /// <param name="value">json key value pair string</param>
-        /// <param name="useOr">if true constructs parameters using or statement if false and</param>
-        /// <returns></returns>
-        public static string CreateParameters(this string value, bool useOr)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return string.Empty;
-            }
-            IDictionary<string, object> searchParamters = value.JsonToDictionary();
-            var @params = new StringBuilder("");
-            if (searchParamters == null)
-            {
-                return @params.ToString();
-            }
-            for (int i = 0; i <= searchParamters.Count() - 1; i++)
-            {
-                string key = searchParamters.Keys.ElementAt(i);
-                var val = (string) searchParamters[key];
-                if (!string.IsNullOrEmpty(key))
-                {
-                    @params.Append(key).Append(" like '").Append(val.Trim()).Append("%' ");
-                    if (i < searchParamters.Count() - 1 && useOr)
-                    {
-                        @params.Append(" or ");
-                    }
-                    else if (i < searchParamters.Count() - 1)
-                    {
-                        @params.Append(" and ");
-                    }
-                }
-            }
-            return @params.ToString();
         }
     }
 }
